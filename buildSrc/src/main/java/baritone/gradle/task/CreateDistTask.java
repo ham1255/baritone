@@ -17,9 +17,6 @@
 
 package baritone.gradle.task;
 
-import baritone.gradle.util.Determinizer;
-import org.gradle.api.file.RegularFileProperty;
-import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.TaskAction;
 
 import java.nio.charset.StandardCharsets;
@@ -31,7 +28,6 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
@@ -39,27 +35,19 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
  * @author Brady
  * @since 10/12/2018
  */
-public abstract class CreateDistTask extends BaritoneGradleTask {
+public class CreateDistTask extends BaritoneGradleTask {
 
     private static MessageDigest SHA1_DIGEST;
-
-    @InputFile
-    abstract public RegularFileProperty getArtifactApiPath();
-
-    @InputFile
-    abstract public RegularFileProperty getArtifactStandalonePath();
-
-    @InputFile
-    abstract public RegularFileProperty getArtifactUnoptimizedPath();
 
     @TaskAction
     protected void exec() throws Exception {
         super.doFirst();
+        super.verifyArtifacts();
 
         // Define the distribution file paths
-        Path api = getRootRelativeFile("dist/" + getFileName(getArtifactApiPath().get().getAsFile().toPath()));
-        Path standalone = getRootRelativeFile("dist/" + getFileName(getArtifactStandalonePath().get().getAsFile().toPath()));
-        Path unoptimized = getRootRelativeFile("dist/" + getFileName(getArtifactUnoptimizedPath().get().getAsFile().toPath()));
+        Path api = getRootRelativeFile("dist/" + getFileName(artifactApiPath));
+        Path standalone = getRootRelativeFile("dist/" + getFileName(artifactStandalonePath));
+        Path unoptimized = getRootRelativeFile("dist/" + getFileName(artifactUnoptimizedPath));
 
         // NIO will not automatically create directories
         Path dir = getRootRelativeFile("dist/");
@@ -69,12 +57,12 @@ public abstract class CreateDistTask extends BaritoneGradleTask {
 
         // Copy build jars to dist/
         // TODO: dont copy files that dont exist
-        Files.copy(getArtifactApiPath().get().getAsFile().toPath(), api, REPLACE_EXISTING);
-        Files.copy(getArtifactStandalonePath().get().getAsFile().toPath(), standalone, REPLACE_EXISTING);
-        Files.copy(getArtifactUnoptimizedPath().get().getAsFile().toPath(), unoptimized, REPLACE_EXISTING);
+        Files.copy(this.artifactApiPath, api, REPLACE_EXISTING);
+        Files.copy(this.artifactStandalonePath, standalone, REPLACE_EXISTING);
+        Files.copy(this.artifactUnoptimizedPath, unoptimized, REPLACE_EXISTING);
 
         // Calculate all checksums and format them like "shasum"
-        List<String> shasum = Stream.of(getArtifactApiPath().get().getAsFile().toPath(), getArtifactStandalonePath().get().getAsFile().toPath(), getArtifactUnoptimizedPath().get().getAsFile().toPath())
+        List<String> shasum = Files.list(getRootRelativeFile("dist/"))
                 .filter(e -> e.getFileName().toString().endsWith(".jar"))
                 .map(path -> sha1(path) + "  " + path.getFileName().toString())
                 .collect(Collectors.toList());
@@ -82,7 +70,7 @@ public abstract class CreateDistTask extends BaritoneGradleTask {
         shasum.forEach(System.out::println);
 
         // Write the checksums to a file
-        Files.write(getRootRelativeFile("dist/checksums.txt"), shasum, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        Files.write(getRootRelativeFile("dist/checksums.txt"), shasum);
     }
 
     private static String getFileName(Path p) {
